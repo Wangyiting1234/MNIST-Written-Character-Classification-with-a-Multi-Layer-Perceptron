@@ -1,0 +1,144 @@
+% --- Model Evaluation File ---
+clear all;
+% load data
+train_images = loadMNISTImages('train-images-idx3-ubyte');
+train_labels =loadMNISTLabels('train-labels-idx1-ubyte');
+test_images = loadMNISTImages('t10k-images-idx3-ubyte');
+test_labels = loadMNISTLabels('t10k-labels-idx1-ubyte');
+
+%prepare the output
+train_number = length(train_labels);
+train_outputs = zeros(train_number,10);
+test_outputs = zeros(length(test_labels),10);
+
+
+
+%tansform the format of ouput of labels
+train_convert_labels = zeros(length(train_labels),10);
+for i = 1:size(train_labels(:,:))
+    label = train_labels(i,1);
+    for j = 1:10
+        if j == label+1
+            train_convert_labels(i,j) = 1;
+        else
+            train_convert_labels(i,j) = 0;
+        end
+    end
+end
+train_convert_labels = train_convert_labels';
+
+%initial the net
+mlp = MLP(784,50, 10);
+mlp.initializeWeightsRandomly(1.0); 
+mean_loss =[];
+mean_acc=[];
+learing_Rate = 0.6;
+batch_size =100;
+
+%shuffle and divide the training and validating data
+shuffle1 = randperm(length(train_labels));
+train_image = train_images(:,shuffle1);
+train_label = train_convert_labels(:,shuffle1);
+
+%the number of Epochs
+ for x=1:20 
+     total_loss=[];
+     total_acc=[];
+     train_correct=0;
+     for j = 1:train_number/batch_size
+        batch_images = train_image(:,(j-1)*batch_size+1:j*batch_size);
+        batch_labels = train_label(:,(j-1)*batch_size+1:j*batch_size);
+        for i = 1:batch_size 
+            mlp.backward(batch_images(:,i), batch_labels(:,i), learing_Rate);
+            output = mlp.compute_output(batch_images(:,i));
+            train_outputs(i+(j-1)*batch_size,:) = output;
+            for b=1:10
+                if train_outputs(i+(j-1)*batch_size,b) == max(train_outputs(i+(j-1)*batch_size,1:10))% 
+                    pos = find(batch_labels(:,i)==1);
+                    if b == pos
+                        train_correct = train_correct + 1;    
+                    end
+                end
+            end
+            loss_temp = output-batch_labels(:,i);
+            loss = mse(loss_temp);
+            total_loss = [total_loss,loss];
+            train_acc = train_correct/train_number;
+            total_acc = [total_acc,train_acc];
+        end
+        end
+        mean_loss = [mean_loss;mean(total_loss,2)];
+        mean_acc = [mean_acc;mean(total_acc,2)];
+        fprintf('For Epoch %i,means loss %.5f \n',x,mean(total_loss,2));
+    end
+    figure('NumberTitle', 'off', 'Name', 'Training Loss');
+    plot(mean_loss);
+    xlabel('Epoch');
+    ylabel('Training loss');
+    title('learing rate:',learing_Rate);
+    figure('NumberTitle', 'off', 'Name', 'Training Accuracy');
+    plot(mean_acc);
+    xlabel('Epoch');
+    ylabel('Training Accuracy');
+    title('learing rate:',learing_Rate);
+    % update the weight of the training model
+    bestHiddenWeight = mlp.hiddenLayerWeights;
+    bestOutWeight = mlp.outputLayerWeights;
+    update_mlp = mlp.modifyWeight(bestHiddenWeight, bestOutWeight);
+
+    % Get the valid outputs
+    %for i = 1:10000
+        %vali_out = update_mlp.compute_output(vali_images(:,i));
+        %vali_outputs(i,:) = vali_out;
+   % end
+    
+    % Training-validation performance evaluation
+    %vali_correct = 0;
+    %for  a = 1:vali_number
+        %for b=1:10
+            %if vali_outputs(a,b) == max(vali_outputs(a,1:10))
+                %pos = find(vali_label(:,a)==1);
+                %if b == pos
+                    %vali_correct = vali_correct + 1;    
+                %end
+            %end
+        %end
+    %end
+    %vali_errorRate = 1-(vali_correct/10000);
+    %fprintf('Validation error rate for fold %i is %f \n', vali_errorRate);
+    %folds_errors(K,1) = vali_errorRate;
+ 
+    % keep the best model after the 5 k-folds validation runs
+    %if K>1 && vali_errorRate<folds_errors((K-1),1)
+        %best_hidden_weights = update_mlp.hiddenLayerWeights;
+        %best_output_weights = update_mlp.outputLayerWeights;
+   %end
+    
+%end
+
+% Get the test outputs
+for i = 1:10000
+    test_out = update_mlp.compute_output(test_images(:,i));
+    test_outputs(i,:) = test_out;
+end
+
+% Test performance evaluation
+test_error=0;
+test_correct=0;
+for i = 1:length(test_labels)
+    for j = 1:10
+        %find the predicted output
+        if test_outputs(i,j) == max(test_outputs(i,1:10))
+           if j-1 ==test_labels(i,1)
+                  test_correct = test_correct + 1;    
+           end
+        end
+    end
+end    
+test_error = 1-(test_correct/length(test_labels));
+fprintf('When training %i times, learning rate is %f, Test Error rate:%f \n,',Epoch,learing_Rate,test_error);
+
+
+
+
+
